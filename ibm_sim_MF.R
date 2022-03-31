@@ -1,68 +1,30 @@
 # This script simulates the outcomes of MajorsFlat CG growth with manipulated plant interspaces
 
-pkgs <- c("som.nn", "dplyr", "tidyverse", "rstan", "ggplot2", "viridisLite")
+# === load packages
+pkgs <- c("car", "som.nn", "tidyverse", "ggplot2", "viridisLite")
 sapply(pkgs, require, character.only = T)
 
 # === helper functions
-# euclidean distance function
-dist.fx <- function(x1, x2, y1, y2) {sqrt((x2-x1)^2 + (y2-y1)^2)}
-# eucledean distance on the toroid wrap
-toroid.dist <- function(x1,y1,x2,y2,xmax,ymax){
-  xcutoff=xmax/2
-  ycutoff=ymax/2
-  dx=abs(x2-x1)
-  dy=abs(y2-y1)
-  if (dx > xcutoff){
-    dx=xmax-dx
-  } 
-  if(dy > ycutoff){
-    dy=ymax-dy
-  }
-  return(sqrt(dx^2+dy^2))
-}
-# competition kernel function based reproducing the relationship from the statistical model
-cf.fn <- function(model=NULL,data=NULL){
-  n = data$N
-  nssp = data$k
-  post = extract(model)
-  iter = dim(post[[1]])[1]
-  # extract parameters
-  a01 = with(post,a01)
-  a2 = with(post,a2)
-  # spatial data
-  sobs = data$size_observations
-  dobs = data$dist_observations^2
-  n_nb = data$n_nb
-  pos = data$pos
-  type = data$type
-  cf_mod = matrix(NA,nrow=iter,ncol=n)
-  for(i in 1:iter){
-    for(j in 1:n){
-      smat = sobs[pos[j] : (pos[j] + n_nb[j] - 1)]
-      dmat = dobs[pos[j] : (pos[j] + n_nb[j] - 1)]
-      cf_mod[i,j]=sum(smat^a01[i] / exp(dmat * a2[i]))
-    }
-  }
-  return(cf_mod)
-}
+source("helper_fns.R")
 
+# === read in the model and data
+modf <- readRDS("data/fit_mf3_segment_c.rds")
+pars <- readRDS("data/parameters.rds")
+dat <- readRDS("data/list_mf3.rds")
 
-# === read in the models and data
-modf <- readRDS("fit_mf3_segment_c.rds")
-dat <- readRDS("list_mf3.rds")
-# actual data from the common garden
-dfcomp <- read.csv("MajorFlats_comp_df1.csv")
+# === load field data from the common garden and select the 2011-2012 censuses
+dfcomp <- read.csv("data/MajorFlats_comp_df1.csv")
 dfcomp2 <- dfcomp[dfcomp$census == 2, ]
 dfcomp3 <- dfcomp[dfcomp$census == 3, ]
-pars <- rstan::extract(modf)
 
 # === observed group differences
-anova(lm(dat$growth_std~dat$subsppcyt))
+Anova(lm(dat$growth_std~dat$subsppcyt))
 fig2 <- dfcomp3 %>% 
+  filter(!is.na(growth_std)) %>% 
   mutate(Type = as.factor(subsppcyt)) %>%
-  mutate(Type = fct_recode(Type, "A.tridentata:2x"="T2n",
-                                      "A.tridentata:4x"="T4n","A.vaseyana:2x"="V2n",
-                                      "A.vaseyana:4x"="V4n","A.wyomingensis:4x"="W4n",
+  mutate(Type = fct_recode(Type, "A.tridentata-2x"="T2n",
+                                      "A.tridentata-4x"="T4n","A.vaseyana-2x"="V2n",
+                                      "A.vaseyana-4x"="V4n","A.wyomingensis-4x"="W4n",
                                     "A.arbuscula"="AR")) %>%
   ggplot(aes(y = growth_std, x = Type)) +
   geom_boxplot() + 
@@ -70,10 +32,10 @@ fig2 <- dfcomp3 %>%
        y=expression(paste("Growth [",m^{3}~month^{-1},"]")), 
        x = "Plant type") + theme_bw() +
   theme(text = element_text(size=14), 
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+        axis.text.x = element_text(angle = 35, vjust = 1, hjust=1))
 
-# ggsave("fig2.pdf",fig2,
-#        width=160,height=120,units=c("mm"),dpi=300,path = "~/Downloads/")
+ggsave("Figures/figS2.pdf",
+       width = 160, height = 120, units = "mm", dpi = 300)
 
 # === extract size measurements
 dead <- which(dfcomp3$surv == 0)
@@ -94,19 +56,16 @@ subspp <- subspp#[pert]
 type <- as.numeric(as.factor(subspp))
 
 # === simulate dist matrices with a toroid wrapper
-#outs = which(dfcomp3$surv == 0) # create index to take out dead plants
-
 nr <- 18 # number of rows in the common garden
 nc <- 26 # number of cols in the common garden
 
-# = create a list of distmatrixes
+# --- create a list of distance matrixes for each simulation treatment
 ndistmat_list <- list()
 tdistmat_list <- list()
 sizemat_list <- list()
-spacing <- seq(.5, 4, by = .25) # spacing
+spacing <- seq(.5, 4, by = .25) 
+
 for(l in 1:length(spacing)){
-  #dist_increment=seq(1,l=n,by=l)
-  #start_point=dist_increment[2]-dist_increment[1]
   x <- rep(seq(0, l = nr, by = spacing[l]), times = nc) 
   y <- sort(rep(seq(0, l = nc, by = spacing[l]), times = nr))
   
@@ -118,7 +77,7 @@ for(l in 1:length(spacing)){
   for(i in 1:N){
     for(j in 1:N){
       ndistmat[i,j] = dist.fx(x[i], x[j], y[i], y[j])
-      tdistmat[i,j] = toroid.dist(x[i], y[i], x[j], y[j], max(x)+spacing[l], max(y)+spacing[l])
+      tdistmat[i,j] = toroid.dist(x[i], y[i], x[j], y[j], max(x) + spacing[l], max(y) + spacing[l])
     }
   }
   ndistmat <- ifelse(ndistmat > 4 | ndistmat == 0,  NA, ndistmat)
@@ -129,8 +88,8 @@ for(l in 1:length(spacing)){
   sizemat_list[[l]] <- sizemat1
 }
 
-# === run stan model
-post <- extract(modf)
+# === create a list input with demographic variables and simulations
+post <- pars
 set.seed(123)
 ind <- 1:2000 # sample(1:2000, 150) # for shorter simulations
 alist <- list(N = N, k = 6, 
@@ -146,12 +105,11 @@ alist <- list(N = N, k = 6,
               sigma_c = with(post, sigma_c)[ind],
               a3 = with(post, a3)[ind,], 
               a2 = with(post, a2)[ind], 
-              a1 = with(post,a1)[ind,],
+              a1 = with(post, a1)[ind,],
               a03 = with(post, a03)[ind], 
               a01 = with(post, a01)[ind],
               sigma = with(post, sigma)[ind], 
               sigma_a3 = with(post, sigma_a3)[ind], 
-              # sigma_a1 = with(post, sigma_a1)[ind],
               nn = length(post$sigma_Itype[ind])) 
 
 # data inputs for the simulation
@@ -175,7 +133,6 @@ for(m in 1:length(spacing)){
                        a01 = with(post, a01)[ind],
                        sigma = with(post, sigma)[ind], 
                        sigma_a3 = with(post, sigma_a3)[ind], 
-                       #sigma_a1 = with(post, sigma_a1)[ind],
                        nn = length(post$sigma_Itype[ind])) 
 }
 

@@ -17,11 +17,11 @@ toroid.dist <- function(x1,y1,x2,y2,xmax,ymax){
   return(sqrt(dx^2+dy^2))
 }
 
-# competition kernel function based reproducing the relationship from the statistical model
-cf.fn <- function(model=NULL,data=NULL){
+# competition kernel function, reproducing the relationship from the statistical model
+cf.fn <- function(modelPars=NULL,data=NULL){
   n = data$N
   nssp = data$k
-  post = extract(model)
+  post = modelPars
   iter = dim(post[[1]])[1]
   # extract parameters
   a01 = with(post,a01)
@@ -37,7 +37,7 @@ cf.fn <- function(model=NULL,data=NULL){
     for(j in 1:n){
       smat = sobs[pos[j] : (pos[j] + n_nb[j] - 1)]
       dmat = dobs[pos[j] : (pos[j] + n_nb[j] - 1)]
-      cf_mod[i,j]=sum(smat^a01[i] / exp(dmat * a2[i]))
+      cf_mod[i,j] = sum(smat^a01[i] / exp(dmat * a2[i]))
     }
   }
   return(cf_mod)
