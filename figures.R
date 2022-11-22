@@ -57,13 +57,14 @@ df %>%
   geom_ribbon(aes(x = spacing, ymin = mu.l, ymax = mu.u), fill = pal[1], alpha = 0.25) +
   geom_ribbon(aes(x = spacing, ymin = musd.l, ymax = musd.u), fill = pal[1], alpha = 0.35) +
   geom_line(aes(x = spacing, y = mu), size = 2, linetype = "dashed") + 
+  geom_hline(yintercept = 1, size = .5, linetype = "dashed", colour = "gray") + 
   labs(x = "Spacing between plants, [m]", y = "Relative F-statistic") +
   theme_bw(base_size = 14) + 
   theme(panel.border = element_blank(), panel.grid = element_blank(), 
         axis.line = element_line())
 
 # export figure
-# ggsave("Figures/fig1.png", width = 130, height = 100, units = "mm", dpi = 300)
+# ggsave("Figures/fig1.svg", width = 130, height = 100, units = "mm", dpi = 300)
 
 # === Figure 2: correlation betwenn full and base models
 mu.mean <- apply(corcoef, 2, mean)
@@ -79,6 +80,7 @@ df %>%
   geom_ribbon(aes(x = spacing, ymin = mu.l, ymax = mu.u), fill = pal[1000], alpha = 0.25) +
   geom_ribbon(aes(x = spacing, ymin = musd.l, ymax = musd.u), fill = pal[1000], alpha = 0.35) +
   geom_line(aes(x = spacing, y = mu), size = 2, linetype = "dashed") + 
+  geom_vline(xintercept = 2.25, size = .5, linetype = "dashed", colour = "gray") + 
   labs(x = "Spacing between plants, [m]", y = "Pearson correlation") +
   theme_bw(base_size = 14) + 
   theme(panel.border = element_blank(), panel.grid = element_blank(), 
@@ -99,7 +101,7 @@ dd_summ <- mu_dd[1,,] %>% t() %>%
   distinct(.keep_all = TRUE) %>% 
   mutate(trtm = 0) 
 
-mu_dd[15,,] %>% t() %>%
+dd_summ125 <- mu_dd[4,,] %>% t() %>% 
   bind_cols(type = as.factor(type)) %>% 
   pivot_longer(cols = 1:2000) %>% 
   select(-name) %>%
@@ -109,24 +111,50 @@ mu_dd[15,,] %>% t() %>%
          lower = mean(value) - sd(value)) %>%
   select(-value) %>%
   distinct(.keep_all = TRUE) %>% 
-  mutate(trtm = 1) %>% 
-  bind_rows(dd_summ) %>% 
+  mutate(trtm = 1)
+
+dd_summ225 <- mu_dd[8,,] %>% t() %>% 
+  bind_cols(type = as.factor(type)) %>% 
+  pivot_longer(cols = 1:2000) %>% 
+  select(-name) %>%
+  group_by(type) %>% 
+  mutate(mean = mean(value), 
+         upper = mean(value) + sd(value), 
+         lower = mean(value) - sd(value)) %>%
+  select(-value) %>%
+  distinct(.keep_all = TRUE) %>% 
+  mutate(trtm = 2)
+
+dd_summ400 <- mu_dd[15,,] %>% t() %>%
+  bind_cols(type = as.factor(type)) %>% 
+  pivot_longer(cols = 1:2000) %>% 
+  select(-name) %>%
+  group_by(type) %>% 
+  mutate(mean = mean(value), 
+         upper = mean(value) + sd(value), 
+         lower = mean(value) - sd(value)) %>%
+  select(-value) %>%
+  distinct(.keep_all = TRUE) %>% 
+  mutate(trtm = 3) %>% 
+  bind_rows(dd_summ, dd_summ125, dd_summ225) %>% 
   mutate(type = fct_recode(type, "A.arbuscula" = "1",
                            "A.tridentata-2x" = "2",
                            "A.tridentata-4x" = "3", "A.vaseyana-2x" = "4", 
-                           "A.vaseyana-4x" = "5", "A.wyomingensis-4x" = "6")) %>%
+                           "A.vaseyana-4x" = "5", "A.wyomingensis-4x" = "6")) 
+
+dd_summ400 %>% 
   ggplot(aes(x = trtm, y = mean, colour = type)) + 
   geom_errorbar(aes(ymax = upper, ymin = lower), width = 0.1) + 
   geom_point(size = 3) +
   geom_line() + 
   scale_color_manual(values = viridis(ncol(pars[[1]]))) +
-  scale_x_discrete(limits = c(0, 1), labels = c("0.5", "4"), expand=c(0,.1))+
+  scale_x_discrete(limits = c(0, 1, 2, 3), labels = c("0.5","1.25","2.25", "4"), expand=c(0,.1))+
   labs(y = expression(paste("Average growth, [", m^3, " ", month^{-1}, "]")), 
        x = "Distance between plants [m]",
        colour = "Plant type") + 
   theme_classic(base_size = 14) 
 
-ggsave("Figures/fig3.pdf", width = 160, height = 90, units = "mm", dpi = 300)
+ggsave("Figures/fig3.png", width = 160, height = 90, units = "mm", dpi = 300)
 
 
 
